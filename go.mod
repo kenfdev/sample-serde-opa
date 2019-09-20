@@ -18,6 +18,7 @@ require (
 	github.com/sirupsen/logrus v1.4.2 // indirect
 	github.com/spf13/cobra v0.0.5 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/ugorji/go v1.1.7 // indirect
 	github.com/yashtewari/glob-intersection v0.0.0-20180916065949-5c77d914dd0b // indirect
 	gopkg.in/fsnotify.v1 v1.4.7 // indirect
 )

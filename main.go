@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/rego"
@@ -46,15 +47,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	r := rego.New(rego.ParsedQuery(q),
+	r1 := rego.New(rego.ParsedQuery(q),
 		rego.Compiler(compiler),
 		rego.Store(store))
 
-	pq, err := r.Partial(ctx)
-	// pr, err := r.PrepareForPartial(ctx)
+	pq1, err := r1.Partial(ctx)
+
+	err = writePartialQueriesToFile(pq1)
+	if err != nil {
+		fmt.Printf("failed to write partial queries to file: %v\n", err)
+		os.Exit(1)
+	}
+
+	// FIXME: this pq2 isn't the same as pq1 and causes failures
+	pq2, err := readPartialQueriesFromFile()
+	if err != nil {
+		fmt.Printf("failed to read partial queries from file: %v\n", err)
+		os.Exit(1)
+	}
 
 	mods2 := map[string]*ast.Module{
-		"hoge": pq.Support[0],
+		"foo": pq2.Support[0],
 	}
 
 	compiler2, err := initCompiler(mods2)
@@ -63,19 +76,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	r2 := rego.New(rego.ParsedQuery(pq.Queries[0]),
+	r2 := rego.New(rego.ParsedQuery(pq2.Queries[0]),
 		rego.Compiler(compiler2),
 		rego.Store(inmem.New()),
 		rego.ParsedInput(input),
 	)
-	pq2, err := r2.Partial(ctx)
-	if err != nil {
-		fmt.Printf("failed to partial eval 2nd: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("pq1: %v\n", pq)
-	fmt.Printf("pq2: %v\n", pq2)
 
 	rs2, err := r2.Eval(ctx)
 	if err != nil {
@@ -84,6 +89,32 @@ func main() {
 	}
 	fmt.Printf("rs2: %v\n", rs2)
 
+}
+
+func readPartialQueriesFromFile() (*rego.PartialQueries, error) {
+	pqb, err := ioutil.ReadFile("partial_queries")
+	if err != nil {
+		return nil, err
+	}
+
+	pq := decodePartialQueries(pqb)
+	return pq, nil
+
+}
+
+func writePartialQueriesToFile(pq *rego.PartialQueries) error {
+	b := encodePartialQueries(pq)
+	file, err := os.Create(`partial_queries`)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.Write(b)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func initModules() (map[string]*ast.Module, error) {
@@ -120,4 +151,21 @@ func initQuery() (ast.Body, error) {
 		return nil, err
 	}
 	return parsedQuery, nil
+}
+
+func encodePartialQueries(pq *rego.PartialQueries) []byte {
+	buf, err := json.Marshal(pq)
+	if err != nil {
+		panic(fmt.Sprintf("error encoding %v to bytes: %v", pq, err))
+	}
+	return buf
+}
+
+func decodePartialQueries(buf []byte) *rego.PartialQueries {
+	var pq rego.PartialQueries
+	err := json.Unmarshal(buf, &pq)
+	if err != nil {
+		panic(fmt.Sprintf("error decoding from bytes: %v", err))
+	}
+	return &pq
 }
