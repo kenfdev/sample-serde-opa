@@ -10,72 +10,14 @@ The Marshalled struct is as follows:
 
 ```json
 {
-  "queries": [
-    [
-      {
-        "index": 0,
-        "terms": {
-          "type": "ref",
-          "value": [
-            { "type": "var", "value": "data" },
-            { "type": "string", "value": "partial" },
-            { "type": "string", "value": "authz" },
-            { "type": "string", "value": "allow" }
-          ]
-        }
-      }
-    ]
-  ],
-  "modules": [
-    {
-      "package": {
-        "path": [
-          { "type": "var", "value": "data" },
-          { "type": "string", "value": "partial" },
-          { "type": "string", "value": "authz" }
-        ]
-      },
-      "rules": [
-        {
-          "head": {
-            "name": "allow",
-            "value": { "type": "boolean", "value": true }
-          },
-          "body": [
-            {
-              "index": 0,
-              "terms": [
-                { "type": "ref", "value": [{ "type": "var", "value": "eq" }] },
-                { "type": "string", "value": "alice" },
-                {
-                  "type": "ref",
-                  "value": [
-                    { "type": "var", "value": "input" },
-                    { "type": "string", "value": "user" }
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "default": true,
-          "head": {
-            "name": "allow",
-            "value": { "type": "boolean", "value": false }
-          },
-          "body": [
-            { "index": 0, "terms": { "type": "boolean", "value": true } }
-          ]
-        }
-      ]
-    }
-  ]
+  "Query": "data.partial.authz.allow",
+  "Support": "package partial.authz\n\nallow = true { \"alice\" = input.user }\ndefault allow = false"
 }
 ```
 
-Current status is that it **panics**.
+The Eval succeeds both before the serialization and after the deserialization
 
 ```
-panic: assertion failed
+1st ResultSet: [{[true] map[]}]
+2nd ResultSet: [{[true] map[]}]
 ```

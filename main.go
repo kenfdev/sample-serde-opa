@@ -14,6 +14,12 @@ import (
 var authzPolicyPath = "policy/authz.rego"
 var authzQuery = "data.authz.allow"
 
+// PartialQuery is a string representation of the rego.PartialQueries
+type PartialQuery struct {
+	Query   string
+	Support string
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -49,7 +55,15 @@ func main() {
 
 	r1 := rego.New(rego.ParsedQuery(q),
 		rego.Compiler(compiler),
-		rego.Store(store))
+		rego.Store(store),
+		rego.ParsedInput(input),
+	)
+	rs1, err := r1.Eval(ctx)
+	if err != nil {
+		fmt.Printf("failed to evaluate 2nd: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("1st ResultSet: %v\n", rs1)
 
 	pq1, err := r1.Partial(ctx)
 
@@ -59,15 +73,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// FIXME: this pq2 isn't the same as pq1 and causes failures
-	pq2, err := readPartialQueriesFromFile()
+	pqs, err := readPartialQueriesFromFile()
 	if err != nil {
 		fmt.Printf("failed to read partial queries from file: %v\n", err)
 		os.Exit(1)
 	}
 
 	mods2 := map[string]*ast.Module{
-		"foo": pq2.Support[0],
+		"foo": ast.MustParseModule(pqs.Support),
 	}
 
 	compiler2, err := initCompiler(mods2)
@@ -76,7 +89,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	r2 := rego.New(rego.ParsedQuery(pq2.Queries[0]),
+	r2 := rego.New(rego.Query(pqs.Query),
 		rego.Compiler(compiler2),
 		rego.Store(inmem.New()),
 		rego.ParsedInput(input),
@@ -87,11 +100,10 @@ func main() {
 		fmt.Printf("failed to evaluate 2nd: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("rs2: %v\n", rs2)
-
+	fmt.Printf("2nd ResultSet: %v\n", rs2)
 }
 
-func readPartialQueriesFromFile() (*rego.PartialQueries, error) {
+func readPartialQueriesFromFile() (*PartialQuery, error) {
 	pqb, err := ioutil.ReadFile("partial_queries")
 	if err != nil {
 		return nil, err
@@ -99,11 +111,14 @@ func readPartialQueriesFromFile() (*rego.PartialQueries, error) {
 
 	pq := decodePartialQueries(pqb)
 	return pq, nil
-
 }
 
 func writePartialQueriesToFile(pq *rego.PartialQueries) error {
-	b := encodePartialQueries(pq)
+	pqs := PartialQuery{
+		Query:   pq.Queries[0].String(),
+		Support: pq.Support[0].String(),
+	}
+	b := encodePartialQueries(pqs)
 	file, err := os.Create(`partial_queries`)
 	if err != nil {
 		return err
@@ -153,7 +168,7 @@ func initQuery() (ast.Body, error) {
 	return parsedQuery, nil
 }
 
-func encodePartialQueries(pq *rego.PartialQueries) []byte {
+func encodePartialQueries(pq PartialQuery) []byte {
 	buf, err := json.Marshal(pq)
 	if err != nil {
 		panic(fmt.Sprintf("error encoding %v to bytes: %v", pq, err))
@@ -161,8 +176,8 @@ func encodePartialQueries(pq *rego.PartialQueries) []byte {
 	return buf
 }
 
-func decodePartialQueries(buf []byte) *rego.PartialQueries {
-	var pq rego.PartialQueries
+func decodePartialQueries(buf []byte) *PartialQuery {
+	var pq PartialQuery
 	err := json.Unmarshal(buf, &pq)
 	if err != nil {
 		panic(fmt.Sprintf("error decoding from bytes: %v", err))
